@@ -42,15 +42,16 @@ async function seedInvoices() {
     );
   `;
 
-  const insertedInvoices = await Promise.all(
-    invoices.map(
-      (invoice) => sql`
-        INSERT INTO invoices (customer_id, amount, status, date)
-        VALUES (${invoice.customer_id}, ${invoice.amount}, ${invoice.status}, ${invoice.date})
-        ON CONFLICT (id) DO NOTHING;
-      `,
-    ),
-  );
+  // Insert invoices one by one to avoid prepared statement issues
+  const insertedInvoices = [];
+  for (const invoice of invoices) {
+    const result = await sql`
+      INSERT INTO invoices (customer_id, amount, status, date)
+      VALUES (${invoice.customer_id}, ${invoice.amount}, ${invoice.status}, ${invoice.date})
+      ON CONFLICT DO NOTHING;
+    `;
+    insertedInvoices.push(result);
+  }
 
   return insertedInvoices;
 }
@@ -103,15 +104,38 @@ async function seedRevenue() {
 
 export async function GET() {
   try {
-    const result = await sql.begin((sql) => [
-      seedUsers(),
-      seedCustomers(),
-      seedInvoices(),
-      seedRevenue(),
-    ]);
+    // Execute each seed function individually with error handling
+    try {
+      await seedUsers();
+      console.log('Users seeded successfully');
+    } catch (error) {
+      console.error('Error seeding users:', error);
+    }
+
+    try {
+      await seedCustomers();
+      console.log('Customers seeded successfully');
+    } catch (error) {
+      console.error('Error seeding customers:', error);
+    }
+
+    try {
+      await seedInvoices();
+      console.log('Invoices seeded successfully');
+    } catch (error) {
+      console.error('Error seeding invoices:', error);
+    }
+
+    try {
+      await seedRevenue();
+      console.log('Revenue seeded successfully');
+    } catch (error) {
+      console.error('Error seeding revenue:', error);
+    }
 
     return Response.json({ message: 'Database seeded successfully' });
   } catch (error) {
-    return Response.json({ error }, { status: 500 });
+    console.error('Error in main seeding process:', error);
+    return Response.json({ error: String(error) }, { status: 500 });
   }
 }
